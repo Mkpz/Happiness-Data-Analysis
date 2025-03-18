@@ -1,0 +1,456 @@
+---
+title: "Project Regression & Time Series Analysis"
+author: "Mahek Patel, Team Name: Mahek Patel"
+date: "2024-11-25"
+output: 
+  pdf_document: 
+    keep_tex: yes
+---
+
+```{r, echo=FALSE, results='hide'}
+library(tidyverse)
+library(caret)
+library(dplyr)
+library(randomForest)
+library(glmnet)
+library(gbm)
+library(Metrics)
+
+
+train = read.csv("C://Users//shrey//OneDrive - Rutgers University//Desktop//16-954-596-02 Regression & Time Series Analysis//train.csv")
+
+test = read.csv("C://Users//shrey//OneDrive - Rutgers University//Desktop//16-954-596-02 Regression & Time Series Analysis//test.csv")
+
+cat("Train data:", nrow(train), "rows\n")
+cat("Test data:", nrow(test), "rows\n")
+
+train_filled <- train
+
+#Replace NA values with the median for specific columns
+cols_to_fill <- c('happiness', 'log_gdp_per_capita', 
+                  'social_support', 'life_expectancy', 'freedom_choices', 
+                  'generosity', 'corruption', 'positive_affect', 'negative_affect')
+
+for (col in cols_to_fill) {
+  median_value <- median(train_filled[[col]], na.rm = TRUE)
+  train_filled[[col]][is.na(train_filled[[col]])] <- median_value
+}
+dim(train_filled)
+
+
+set.seed(42)
+predictor_columns <- setdiff(colnames(train_filled), "happiness")
+#Splitting Train data to get Validation data
+#For new training data (80% of the total train data)
+train_indices <- sample(1:nrow(train_filled), size = 0.8 * nrow(train_filled))
+
+X_train <- train_filled[train_indices, predictor_columns] 
+X_test <- train_filled[-train_indices, predictor_columns] 
+y_train <- train_filled$happiness[train_indices] 
+y_test <- train_filled$happiness[-train_indices] 
+
+
+```
+
+## EDA:
+
+#Correlation and Scatterplot Matrix of Predictors
+#Influential point or potential outliers seen as per some skewness in scatterplot as well as the density plot.
+
+```{r, message=FALSE}
+selected_cols <- c('happiness', 'log_gdp_per_capita', 
+                  'social_support', 'life_expectancy', 'freedom_choices', 
+                  'generosity', 'corruption', 'positive_affect', 'negative_affect')
+
+library(GGally)
+ggpairs(train_filled[, selected_cols], 
+        title = "Scatterplot Matrix of Predictors")
+
+```
+
+ 
+```{r, echo=FALSE}
+numeric_cols <- c('year', 'happiness', 'log_gdp_per_capita', 
+                  'social_support', 'life_expectancy', 'freedom_choices', 
+                  'generosity', 'corruption', 'positive_affect', 'negative_affect')
+
+cor_matrix <- cor(train_filled[, numeric_cols], use = "complete.obs")
+library(reshape2)
+library(corrplot)
+corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8, tl.col = "black")
+```
+
+
+
+#Line plot of Happiness trend over time
+```{r, echo=FALSE , warning=FALSE}
+
+library(tidyverse)
+library(ggplot2)
+library(maps)
+
+#map of countries to continents
+country_to_continent <- tribble(
+  ~country,                  ~continent,
+  "Egypt",                    "Africa",
+  "Sierra Leone",             "Africa",
+  "Pakistan",                   "Asia",
+  "Yemen, Rep.",                "Asia",
+  "Bolivia",                "Americas",
+  "Canada",                "Americas",
+  "Italy",                   "Europe",
+  "Portugal",                "Europe",
+  "Afghanistan",             "Asia",
+  "Albania",                 "Europe",
+  "Algeria",                 "Africa",
+  "Angola",                  "Africa",
+  "Argentina",               "South America",
+  "Armenia",                 "Asia",
+  "Australia",               "Oceania",
+  "Austria",                 "Europe",
+  "Azerbaijan",              "Asia",
+  "Bahrain",                 "Asia",
+  "Bangladesh",              "Asia",
+  "Belarus",                 "Europe",
+  "Belgium",                 "Europe",
+  "Belize",                  "North America",
+  "Benin",                   "Africa",
+  "Bhutan",                  "Asia",
+  "Bolivia",                 "South America",
+  "Bosnia and Herzegovina",  "Europe",
+  "Botswana",                "Africa",
+  "Brazil",                  "South America",
+  "Bulgaria",                "Europe",
+  "Burkina Faso",            "Africa",
+  "Burundi",                 "Africa",
+  "Cambodia",                "Asia",
+  "Cameroon",                "Africa",
+  "Canada",                  "North America",
+  "Chad",                    "Africa",
+  "Chile",                   "South America",
+  "China",                   "Asia",
+  "Colombia",                "South America",
+  "Comoros",                 "Africa",
+  "Congo (Brazzaville)",     "Africa",
+  "Congo (Kinshasa)",        "Africa",
+  "Costa Rica",              "North America",
+  "Croatia",                 "Europe",
+  "Cyprus",                  "Asia",
+  "Czechia",                 "Europe",
+  "Djibouti",                "Africa",
+  "Dominican Republic",      "North America",
+  "Ecuador",                 "South America",
+  "Egypt",                   "Africa",
+  "El Salvador",             "North America",
+  "Estonia",                 "Europe",
+  "Ethiopia",                "Africa",
+  "France",                  "Europe",
+  "Gabon",                   "Africa",
+  "Gambia",                  "Africa",
+  "Georgia",                 "Asia",
+  "Germany",                 "Europe",
+  "Ghana",                   "Africa",
+  "Greece",                  "Europe",
+  "Guatemala",               "North America",
+  "Guinea",                  "Africa",
+  "Guyana",                  "South America",
+  "Haiti",                   "North America",
+  "Honduras",                "North America",
+  "Hungary",                 "Europe",
+  "Iceland",                 "Europe",
+  "India",                   "Asia",
+  "Indonesia",               "Asia",
+  "Iran",                    "Asia",
+  "Iraq",                    "Asia",
+  "Ireland",                 "Europe",
+  "Israel",                  "Asia",
+  "Italy",                   "Europe",
+  "Ivory Coast",             "Africa",
+  "Jamaica",                 "North America",
+  "Japan",                   "Asia",
+  "Jordan",                  "Asia",
+  "Kazakhstan",              "Asia",
+  "Kenya",                   "Africa",
+  "Kosovo",                  "Europe",
+  "Kuwait",                  "Asia",
+  "Kyrgyzstan",              "Asia",
+  "Laos",                    "Asia",
+  "Latvia",                  "Europe",
+  "Lebanon",                 "Asia",
+  "Liberia",                 "Africa",
+  "Libya",                   "Africa",
+  "Lithuania",               "Europe",
+  "Madagascar",              "Africa",
+  "Malawi",                  "Africa",
+  "Malaysia",                "Asia",
+  "Mali",                    "Africa",
+  "Malta",                   "Europe",
+  "Mauritania",              "Africa",
+  "Mauritius",               "Africa",
+  "Mexico",                  "North America",
+  "Moldova",                 "Europe",
+  "Mongolia",                "Asia",
+  "Montenegro",              "Europe",
+  "Morocco",                 "Africa",
+  "Mozambique",              "Africa",
+  "Namibia",                 "Africa",
+  "Nepal",                   "Asia",
+  "Netherlands",             "Europe",
+  "Nicaragua",               "North America",
+  "Niger",                   "Africa",
+  "Nigeria",                 "Africa",
+  "North Macedonia",         "Europe",
+  "Norway",                  "Europe",
+  "Oman",                    "Asia",
+  "Pakistan",                "Asia",
+  "Panama",                  "North America",
+  "Paraguay",                "South America",
+  "Peru",                    "South America",
+  "Philippines",             "Asia",
+  "Poland",                  "Europe",
+  "Portugal",                "Europe",
+  "Qatar",                   "Asia",
+  "Romania",                 "Europe",
+  "Russia",                  "Europe",
+  "Saudi Arabia",            "Asia",
+  "Senegal",                 "Africa",
+  "Serbia",                  "Europe",
+  "Sierra Leone",            "Africa",
+  "Singapore",               "Asia",
+  "Slovakia",                "Europe",
+  "Slovenia",                "Europe",
+  "Somalia",                 "Africa",
+  "Somaliland region",       "Africa",
+  "South Africa",            "Africa",
+  "South Korea",             "Asia",
+  "South Sudan",             "Africa",
+  "Spain",                   "Europe",
+  "Sri Lanka",               "Asia",
+  "State of Palestine",      "Asia",
+  "Sudan",                   "Africa",
+  "Suriname",                "South America",
+  "Sweden",                  "Europe",
+  "Syria",                   "Asia",
+  "Taiwan Province of China","Asia",
+  "Tajikistan",              "Asia",
+  "Tanzania",                "Africa",
+  "Thailand",                "Asia",
+  "Trinidad and Tobago",     "North America",
+  "Tunisia",                 "Africa",
+  "Turkmenistan",            "Asia",
+  "Türkiye",                 "Asia",
+  "Uganda",                  "Africa",
+  "Ukraine",                 "Europe",
+  "United Arab Emirates",    "Asia",
+  "United Kingdom",          "Europe",
+  "United States",           "North America",
+  "Uruguay",                 "South America",
+  "Uzbekistan",              "Asia",
+  "Venezuela",               "South America",
+  "Vietnam",                 "Asia",
+  "Yemen",                   "Asia",
+  "Zambia",                  "Africa",
+  "Zimbabwe",                "Africa",
+  "Central African Republic", "Africa", 
+  "Cuba",                  "North America",
+  "Eswatini",                 "Africa",
+  "Lesotho",                  "Africa",
+  "Luxembourg",                "Europe",
+  "Myanmar",                  "Asia",
+  "New Zealand",               "Oceania",
+  "Switzerland",                "Europe", 
+  "Denmark",                    "Europe", 
+  "Finland",                   "Europe", 
+  "Hong Kong S.A.R. of China",   "Asia", 
+  "Rwanda",                      "Africa", 
+  "Togo",                          "Africa",
+)
+
+country_to_continent <- country_to_continent %>% 
+     distinct(country, .keep_all = TRUE)
+
+train_filled_with_continents <- train_filled %>%
+     left_join(country_to_continent, by = "country")
+
+unmatched_countries <- setdiff(train_filled$country, country_to_continent$country)
+highlighted_countries <- c("Canada", "Italy", "Portugal", "Pakistan", "Egypt", "Bolivia", "Yemen", "Sierra Leone")
+highlighted_data <- train_filled_with_continents %>% 
+    filter(country %in% highlighted_countries)
+
+line_plot <- ggplot(train_filled_with_continents, aes(x = year, y = happiness, group = country, color = continent)) +
+  geom_line(alpha = 0.5) +
+  geom_line(data = highlighted_data,
+            aes(group = country), size = 1.2) +
+  geom_line(data = train_filled_with_continents %>% 
+              group_by(year) %>% 
+              summarize(happiness = mean(happiness, na.rm = TRUE)),
+            aes(group = 1), linetype = "dashed", color = "gray", size = 1) +
+  
+  geom_text(data = highlighted_data %>%
+              filter(country %in% c("Canada", "Bolivia", "Egypt") & year == 2007),
+            aes(label = country), 
+            vjust = -1,  
+            hjust = 0,   
+            size = 3,    
+            fontface = "bold", 
+            color = "black") +
+  geom_text(data = highlighted_data %>%
+              filter(!country %in% c("Canada", "Bolivia", "Egypt") & year == 2010),  
+            aes(label = country), 
+            vjust = -1,  
+            hjust = 0,   
+            size = 3,    
+            fontface = "bold",  
+            color = "black") +
+  labs(title = "Happiness Trends Over Time", x = "Year", y = "Happiness") +
+  scale_x_continuous(limits = c(2007, 2017)) + 
+  theme_minimal() +
+  theme(legend.position = "bottom")
+print(line_plot)
+
+```
+
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(maps)
+library(rnaturalearth)
+
+#country name correction code snippet provided by Sofia Pignataro
+turkey <- train_filled %>%
+  filter(str_detect(country, 'T*rkiye')) %>%
+  pull(country) %>%
+  unique()
+
+world <- map_data("world") %>%
+  mutate(region = case_when(
+    region == "Republic of Congo" ~ "Congo (Brazzaville)",
+    region == "Democratic Republic of the Congo" ~ "Congo (Kinshasa)",
+    region == "Czech Republic" ~ "Czechia",
+    region == "Macedonia" ~ "North Macedonia",
+    region == "Republic of Serbia" ~ "Serbia",
+    region == "Palestine" ~ "State of Palestine",
+    region == "Taiwan" ~ "Taiwan Province of China",
+    region == "United Republic of Tanzania" ~ "Tanzania",
+    region == "Turkey" ~ turkey,
+    region == "United States of America" ~ "United States",
+    region == "Swaziland" ~ "Eswatini",
+    region == "Somaliland" ~ "Somaliland region",
+    TRUE ~ region
+  ))
+
+happiness_2007 <- train_filled %>%
+  filter(year == 2007) %>%
+  select(country, happiness)
+
+happiness_2017 <- train_filled %>%
+  filter(year == 2017) %>%
+  select(country, happiness)
+
+world_happiness_2007 <- world %>%
+  left_join(happiness_2007, by = c("region" = "country"))
+world_happiness_2017 <- world %>%
+  left_join(happiness_2017, by = c("region" = "country"))
+
+happiness_map_2007 <- ggplot(data = world_happiness_2007, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = happiness), color = "black") +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey50", name = "Happiness Score") +
+  coord_fixed(1.3) +
+  theme_void() +
+  labs(title = "Happiness Scores in 2007")
+
+happiness_map_2017 <- ggplot(data = world_happiness_2017, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = happiness), color = "black") +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey50", name = "Happiness Score") +
+  coord_fixed(1.3) +
+  theme_void() +
+  labs(title = "Happiness Scores in 2017")
+
+library(gridExtra)
+grid.arrange(happiness_map_2007, happiness_map_2017, ncol = 2)
+```
+
+
+# Model final with output:
+
+
+```{r, echo=FALSE, results='hide'}
+library(caret)
+set.seed(42)
+train_control <- trainControl(method = "cv", number = 5) #trying 5-fold cross-validation at first
+
+#training the Random Forest model using X_train and Y_train
+cols_consider = c('log_gdp_per_capita', 'social_support', 'life_expectancy', 'freedom_choices', 'corruption', 'positive_affect')
+
+rf_model0 <- train(
+  x = X_train[,cols_consider],
+  y = y_train,
+  method = "rf",          
+  trControl = train_control,
+  tuneLength = 5          
+)
+
+print(rf_model0)
+
+saveRDS(rf_model0, "rf_model0.rds")
+rf_predictions0 <- predict(rf_model0, newdata = X_test)
+rmse_rf0 <- sqrt(mean((rf_predictions0 - y_test)^2))
+```
+
+# RMSE for prediction of Happiness on validation data (y_test)
+```{r, echo=FALSE, message=FALSE}
+library(caret)
+cat("RMSE for Random Forest on Vlaidation Data:", rmse_rf0, "\n")
+
+importance0 <- varImp(rf_model0, scale = TRUE)
+plot(importance0, main = "Variable Importance (Random Forest)")
+
+```
+The RMSE of 0.4711557 on the validation data indicates that, on average, the Random Forest model's predictions are off by approximately 0.47 units from the true values on unseen data.
+
+As seen 6 predictors significant, so using them to create final model:
+
+```{r, echo=FALSE, results='hide'}
+library(randomForest)
+library(caret)
+
+#cross-validation control
+set.seed(42)
+train_control <- trainControl(
+  method = "cv", #k-fold
+  number = 10, 
+  savePredictions = "final" 
+)
+
+
+#Best random forest model:happiness ~ log_gdp_per_capita + social_support + life_expectancy + freedom_choices + corruption + positive_affect
+
+
+rf_model <- train(
+  happiness ~ log_gdp_per_capita + social_support + life_expectancy +
+               freedom_choices + corruption + positive_affect,
+  data = train_filled,
+  method = "rf",          
+  trControl = train_control,
+  tuneLength = 5        
+)
+print(rf_model)
+saveRDS(rf_model, "rf_model.rds")
+
+```
+
+
+```{r}
+#Prediction on actual test data
+rf_predictions <- predict(rf_model, newdata = test)
+rf_predictions <- pmax(rf_predictions, 0)
+rf_predictions <- data.frame(ID = test$ID, happiness = rf_predictions)
+write.csv(rf_predictions, "MKP_submissionmod4.csv", row.names = FALSE)
+
+importance <- varImp(rf_model, scale = TRUE)
+plot(importance, main = "Variable Importance (Random Forest)")
+```
+
+The plot ranks the importance of various predictors in the happiness prediction model. Notably, variables such as log GDP per capita, life expectancy, and social support are the most influential predictors, while corruption and freedom of choice have lower importance. The 
