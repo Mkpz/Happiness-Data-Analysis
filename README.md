@@ -1,8 +1,8 @@
 # World Happiness Trends Analysis (2007-2017)
 
 [![R](https://img.shields.io/badge/R-276DC3?style=flat&logo=r&logoColor=white)](https://www.r-project.org/)
-[![Machine Learning](https://img.shields.io/badge/Machine%20Learning-Random%20Forest-green)](https://github.com/yourusername/happiness-data-analysis)
-[![Data Visualization](https://img.shields.io/badge/Data-Visualization-blue)](https://github.com/yourusername/happiness-data-analysis)
+[![Machine Learning](https://img.shields.io/badge/Machine%20Learning-Random%20Forest-green)](https://github.com/Mkpz/Happiness-Data-Analysis)
+[![Data Visualization](https://img.shields.io/badge/Data-Visualization-blue)](https://github.com/Mkpz/Happiness-Data-Analysis)
 
 A comprehensive machine learning analysis examining global happiness trends over time, implementing Random Forest regression to predict happiness scores based on socioeconomic indicators with 0.47 RMSE on validation data.
 
