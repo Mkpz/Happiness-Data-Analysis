@@ -1,0 +1,17 @@
+# .gitattributes for Causal Inference Education Analysis
+
+# Mark R Markdown files as R language
+*.Rmd linguist-language=R
+*.rmd linguist-language=R
+
+# Mark R scripts as R
+*.R linguist-language=R
+
+# Mark documentation files (don't count toward language stats)
+*.pdf linguist-documentation
+*.md linguist-documentation
+
+# Mark image files as documentation
+*.png linguist-documentation
+*.jpg linguist-documentation
+*.jpeg linguist-documentation
